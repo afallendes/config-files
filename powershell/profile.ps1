@@ -144,8 +144,8 @@ function prompt {
     # $username = $env:USERNAME
     # $hostname = $env:COMPUTERNAME
     # $promptChar = [char]::ConvertFromUtf32(0x25BA)
-    
-    "$(TextWithColor "[" -Color Magenta)$location$(TextWithColor "]>" -Color Magenta) "
+    $color = "Blue"
+    "$(TextWithColor "[" -Color $color)$location$(TextWithColor "]>" -Color $color) "
 }
 
 
