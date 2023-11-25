@@ -1,51 +1,100 @@
-# Configuration
-Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
+# Init
 
-
-
-# Functions
-function TextWithColor {
+function InstallImport-Module {
     param (
-        [string]
-        $Text,
-
-        [ValidateSet(
-            "Black",
-            "Red",
-            "Green",
-            "Yellow",
-            "Blue",
-            "Magenta",
-            "Cyan",
-            "White"
-        )]
-        [string]
-        $Color = "Default",
-
-        [switch]
-        $Bold
+        [string[]]$List
     )
-    
-    $SEQ_ESC = [char]27
-    $SEQ_RESET = "$SEQ_ESC[0m"
-    $SEQ_COLOR = switch ($Color) {
-        "Black"   { "$SEQ_ESC[30m" }
-        "Red"     { "$SEQ_ESC[31m" }
-        "Green"   { "$SEQ_ESC[32m" }
-        "Yellow"  { "$SEQ_ESC[33m" }
-        "Blue"    { "$SEQ_ESC[34m" }
-        "Magenta" { "$SEQ_ESC[35m" }
-        "Cyan"    { "$SEQ_ESC[36m" }
-        "White"   { "$SEQ_ESC[37m" }
-        "Default" { "$SEQ_ESC[39m" }
+
+    foreach($module in $List) {
+        if(Get-Module -ListAvailable $module) {
+            Import-Module $module
+        } else {
+            # Module does not exist, install it
+            Write-Host "Installing... '$module'"
+            Install-Module $module -Scope CurrentUser -Force
+            Import-Module $module
+        }
     }
-    
-    $SEQ = $SEQ_COLOR
-    if ($Bold) {
-        $SEQ = "$SEQ_ESC[1m" + $SEQ
+}
+
+InstallImport-Module -List (
+    "PSReadLine",
+    "posh-git",
+    "Terminal-Icons"
+)
+
+
+
+# Configuration
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
+Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
+Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
+Set-PSReadLineOption -PredictionSource History
+
+
+
+# Helpers
+
+function Reload-Profile { . $PROFILE; Clear-Host }
+
+function Format-Text {
+    <#
+    .SYNOPSIS
+        Returnes customized/formatted text.
+    .DESCRIPTION
+        The Format-Text cmdlet returns the passed text as a formatted version
+        following the params privded based on $PSStyle.
+    #>
+    [CmdletBinding()]
+    param (
+        [string]$Text,
+        
+        [string]$ForegroundColor = "Default",
+        [string]$BackgroundColor = "Default",
+
+        [ValidateSet('Bold', 'Italic', 'Underline', 'Strikethrough')]
+        [string]$Style = "Default"
+    )
+
+    function Test-ValidateColorSet {
+        
+        param (
+            [ValidateSet(
+                "Default",
+                "Black",
+                "BrightBlack",
+                "White",
+                "BrightWhite",
+                "Red",
+                "BrightRed",
+                "Magenta",
+                "BrightMagenta",                                                                                                                                                                                                                                                         
+                "Blue",
+                "BrightBlue",
+                "Cyan",
+                "BrightCyan",
+                "Green",
+                "BrightGreen",
+                "Yellow"
+            )]
+
+            [string]$Value
+        )
+
     }
 
-    "$SEQ$Text$SEQ_RESET"
+    Test-ValidateColorSet -Value $ForegroundColor
+    Test-ValidateColorSet -Value $BackgroundColor
+
+    return Join-String -Input (
+        $($PSStyle.$Style),
+        $($PSStyle.Background.$BackgroundColor),
+        $($PSStyle.Foreground.$ForegroundColor),
+        $Text,
+        $($PSStyle.Reset)
+    )
 }
 
 function Copy-SshId {
@@ -98,7 +147,7 @@ function New-File {
 		[String]$Path
 	)
 
-	return New-Item -Type File -Path $Path
+	return New-Item -Type File -Path $Path -Force
 }
 
 function New-Directory {
@@ -107,7 +156,7 @@ function New-Directory {
 		[String]$Path
 	)
 
-	return New-Item -Type Directory -Path $Path
+	return New-Item -Type Directory -Path $Path -Force
 }
 
 
@@ -119,43 +168,50 @@ Set-Alias -Name "which" -Value Find-Element
 Set-Alias -Name "pwd" -Value Get-LocationAsString
 Set-Alias -Name "touch" -Value New-File
 Set-Alias -Name "touchd" -Value New-Directory
-
-
-
-# Session variables
-$STARTUP_DIRECTORY = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
-$TERMINAL_SETTINGS = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+Set-Alias -Name "cat" -Value bat # scoop
+Set-Alias -Name "reload" -Value Reload-Profile
 
 
 
 # Environment variables
-$env:Path += ';C:\Program Files\Oracle\VirtualBox\'
+$PSDefaultParameterValues['*:Encoding'] = 'utf8'
+$PROFILE = $MyInvocation.MyCommand.Path
+$STARTUPDIR = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
+$PWSH_PROFILE_PS1 = $PROFILE
+$PWSH_PROFILE_DIR = Split-Path $PROFILE
+$WINDOWSTERMINAL_SETTINGS_JSON = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
 
 
 
-# Prompt
-function prompt {
-    $location = (Get-Location).Path
-    # $location = $location.replace($env:USERPROFILE, $(TextWithColor "~" -Color Magenta))
-    # $location = $location.replace("\", $(TextWithColor "\" -Color Magenta))
-    $location = $location.replace($env:USERPROFILE, "~")
-    # $location = Split-Path -leaf -path (Get-Location)
-    # $timestamp = Get-Date -Format "yyyy/MM/dd HH:mm:ss"	
-    # $username = $env:USERNAME
-    # $hostname = $env:COMPUTERNAME
-    # $promptChar = [char]::ConvertFromUtf32(0x25BA)
-    $color = "Blue"
-    "$(TextWithColor "[" -Color $color)$location$(TextWithColor "]>" -Color $color) "
+# Posh-Git Prompt
+
+function CustomPoshGitPrompt {
+    $timestamp = '$(Get-Date -f "HH:mm:ss")' # single quote to be evaluated each time
+    $logo = "$(Format-Text -Text "PS" -ForegroundColor "Magenta" -Style "Bold")"
+    $abbreviatedHome = "~"
+    $cwd = "$((Get-Location).Path.replace($env:USERPROFILE, $abbreviatedHome))"
+
+    $promptPrefix = "[$timestamp] $logo "
+    $promptPath = "[$(Format-Text -Text $cwd -ForegroundColor "BrightBlack")]"
+    $promptSuffix = "$(":" * ($nestedPromptLevel + 1))"
+
+
+    $GitPromptSettings.DefaultPromptPrefix.Text = $promptPrefix
+    $GitPromptSettings.DefaultPromptPath.Text = $promptPath
+    $GitPromptSettings.DefaultPromptSuffix.Text = $promptSuffix
 }
 
+CustomPoshGitPrompt
+        
 
 
-# Load custom scripts
-$customScripts = "$env:USERPROFILE\Documents\PowerShell\CustomScripts"
-if (Test-Path -Path $customScripts) {
-    foreach ($script in Get-ChildItem -Path $customScripts\*.ps1 -File) {
+# Load extra scripts
+
+$PWSH_SCRIPTS_DIR = "$PWSH_PROFILE_DIR\Scripts"
+if (Test-Path -Path $PWSH_SCRIPTS_DIR) {
+    foreach ($script in Get-ChildItem -Path $PWSH_SCRIPTS_DIR\*.ps1 -File) {
         . $script.FullName
     }
 } else {
-    [void](New-Item -ItemType Directory -Path $customScripts)
+    [void](New-Item -ItemType Directory -Path $PWSH_SCRIPTS_DIR)
 }
