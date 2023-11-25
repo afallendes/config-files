@@ -188,11 +188,10 @@ $WINDOWSTERMINAL_SETTINGS_JSON = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTe
 function CustomPoshGitPrompt {
     $timestamp = '$(Get-Date -f "HH:mm:ss")' # single quote to be evaluated each time
     $logo = "$(Format-Text -Text "PS" -ForegroundColor "Magenta" -Style "Bold")"
-    $abbreviatedHome = "~"
-    $cwd = "$((Get-Location).Path.replace($env:USERPROFILE, $abbreviatedHome))"
+    $path = '$($(Get-Location).Path.replace($env:USERPROFILE, "~"))'
 
     $promptPrefix = "[$timestamp] $logo "
-    $promptPath = "[$(Format-Text -Text $cwd -ForegroundColor "BrightBlack")]"
+    $promptPath = "[$(Format-Text -Text $path -ForegroundColor "BrightBlack")]"
     $promptSuffix = "$(":" * ($nestedPromptLevel + 1))"
 
 
