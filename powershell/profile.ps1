@@ -1,12 +1,12 @@
 # Init
 
-function InstallImport-Module {
+function ImportInstall-Module {
     param (
         [string[]]$List
     )
 
     foreach($module in $List) {
-        if(Get-Module -ListAvailable $module) {
+        if (Get-Module -ListAvailable $module) {
             Import-Module $module
         } else {
             # Module does not exist, install it
@@ -17,15 +17,16 @@ function InstallImport-Module {
     }
 }
 
-InstallImport-Module -List (
+ImportInstall-Module -List (
     "PSReadLine",
-    "posh-git",
+    "Posh-Git",
     "Terminal-Icons"
 )
 
 
 
 # Configuration
+
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
@@ -162,6 +163,7 @@ function New-Directory {
 
 
 # Aliases
+
 Set-Alias -Name "ssh-copy-id" -Value Copy-SshId
 Set-Alias -Name "mdcd" -Value Start-WorkDirectory
 Set-Alias -Name "which" -Value Find-Element
@@ -174,6 +176,7 @@ Set-Alias -Name "reload" -Value Reload-Profile
 
 
 # Environment variables
+
 $PSDefaultParameterValues['*:Encoding'] = 'utf8'
 $PROFILE = $MyInvocation.MyCommand.Path
 $STARTUPDIR = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
@@ -186,9 +189,14 @@ $WINDOWSTERMINAL_SETTINGS_JSON = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTe
 # Posh-Git Prompt
 
 function CustomPoshGitPrompt {
+
+    $user = Join-String -Input (
+        "$(if ($env:UserDomain -ne $env:ComputerName) { "$env:UserDomain\" })",
+        "$env:UserName@$env:ComputerName"
+    )
     $timestamp = '$(Get-Date -f "HH:mm:ss")' # single quote to be evaluated each time
     $logo = "$(Format-Text -Text "PS" -ForegroundColor "Magenta" -Style "Bold")"
-    $path = '$($(Get-Location).Path.replace($env:USERPROFILE, "~"))'
+    $path = '$($(Get-Location).Path.replace($env:USERPROFILE, "~"))' # single quote to be evaluated each time
 
     $promptPrefix = "[$timestamp] $logo "
     $promptPath = "[$(Format-Text -Text $path -ForegroundColor "BrightBlack")]"
